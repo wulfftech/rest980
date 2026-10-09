@@ -7,6 +7,7 @@
   "enableLocal": "yes",
   "enableCloud": "yes",
   "keepAlive": "yes",
+  "requestTimeout": 10000,
   "basicAuthUser": null,
   "basicAuthPass": null,
   "sslKeyFile": null,
