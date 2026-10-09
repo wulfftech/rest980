@@ -15,6 +15,8 @@ var firmwareVersion = parseInt((process.env.FIRMWARE_VERSION || config.firmwareV
 var enableLocal = process.env.ENABLE_LOCAL || config.enableLocal || 'yes';
 var enableCloud = process.env.ENABLE_CLOUD || config.enableCloud || 'yes';
 var keepAlive = process.env.KEEP_ALIVE || config.keepAlive || 'yes';
+var requestTimeout = parseInt(process.env.REQUEST_TIMEOUT || config.requestTimeout, 10);
+if (isNaN(requestTimeout)) requestTimeout = 10000;
 
 // Temporal:
 if (firmwareVersion === 2) enableCloud = 'no';
@@ -179,7 +181,7 @@ function map2dorita (source, method, hasArgs) {
     if (keepAlive === 'no' && firmwareVersion === 2) {
       return sendAndDisconnect(method, hasArgs ? req.body : undefined, res, next);
     }
-    myRobot[source][method](hasArgs ? req.body : undefined).then(function (resp) {
+    withTimeout(myRobot[source][method](hasArgs ? req.body : undefined)).then(function (resp) {
       res.send(resp);
     }).catch(next);
   };
@@ -187,12 +189,35 @@ function map2dorita (source, method, hasArgs) {
 
 function sendAndDisconnect (method, args, res, next) {
   let client = new dorita980.Local(blid, password, knownIP, 2);
-  client.on('connect', function () {
-    client[method](args).then(function (resp) {
-      res.send(resp);
-      client.end();
-    }).catch(next);
+  // the timeout covers connecting as well as the call itself
+  withTimeout(new Promise(function (resolve) {
+    client.on('connect', resolve);
+  }).then(function () {
+    return client[method](args);
+  })).then(function (resp) {
+    res.send(resp);
+    client.end();
+  }).catch(function (err) {
+    client.end(true);
+    next(err);
   });
+}
+
+// rejects with a 504 error if the robot takes longer than requestTimeout ms (0 = never)
+function withTimeout (promise) {
+  if (!requestTimeout) return promise;
+  var timer;
+  var timeout = new Promise(function (resolve, reject) {
+    timer = setTimeout(function () {
+      var err = new Error('Timed out waiting for the robot.');
+      err.status = 504;
+      reject(err);
+    }, requestTimeout);
+  });
+  var clear = function () { clearTimeout(timer); };
+  promise.then(clear, clear);
+  // only the first to settle counts, so a late answer can't send a second response
+  return Promise.race([promise, timeout]);
 }
 
 module.exports = router;
