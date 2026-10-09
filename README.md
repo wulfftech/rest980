@@ -116,6 +116,7 @@ Available actions:
 - evac (empty the bin into the dock - firmware 2 robots with a bin-evacuation dock such as the Clean Base on i7+/s9+ only)
 - resume
 - cleanRoom
+- find (play the locator sound - firmware 2 only)
 
 Example: start to clean
 
